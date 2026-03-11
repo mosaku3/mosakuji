@@ -1,0 +1,407 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>もさくじ</title>
+
+    <!-- =========================================================
+         🌟 X埋め込み用設定 🌟
+    ========================================================== -->
+    <meta name="twitter:card" content="summary_large_image">
+    <meta name="twitter:site" content="@mosaku3">
+    <meta name="twitter:title" content="もさくじ">
+    <meta name="twitter:description" content="今日の運勢ともさくさんのおすすめの過去ポストがランダムで登場するおみくじです。">
+    <meta name="twitter:image" content="https://mosaku3.github.io/x-gacha/mosakuji.jpg">
+    <meta name="twitter:url" content="https://mosaku3.github.io/x-gacha/index.html">
+    <!-- ========================================================= -->
+
+    <script src="https://cdn.tailwindcss.com"></script>
+    <style>
+        body, html { margin: 0; padding: 0; width: 100%; height: 100%; overflow: hidden; }
+        
+        /* ガチャカプセルのアニメーション */
+        .bounce-animation {
+            animation: bounce-in 0.6s cubic-bezier(0.175, 0.885, 0.32, 1.275) both;
+        }
+        @keyframes bounce-in {
+            0% { transform: scale(0); opacity: 0; }
+            50% { transform: scale(1.1); }
+            100% { transform: scale(1); opacity: 1; }
+        }
+
+        /* ツイート表示エリアのスクロール（Player Card内で見切れないようにするため） */
+        .tweet-scroll-area {
+            max-height: 400px;
+            overflow-y: auto;
+            -webkit-overflow-scrolling: touch;
+        }
+        
+        /* スクロールバーの非表示（見た目をスッキリさせるため） */
+        .tweet-scroll-area::-webkit-scrollbar { display: none; }
+        .tweet-scroll-area { -ms-overflow-style: none; scrollbar-width: none; }
+    </style>
+</head>
+<body class="bg-gradient-to-br from-indigo-500 via-purple-500 to-pink-500 flex flex-col items-center justify-center font-sans text-gray-800 touch-none">
+
+    <div class="bg-white/95 backdrop-blur-md p-6 rounded-3xl shadow-2xl border border-white/20 text-center max-w-[95%] w-[360px] max-h-[95vh] flex flex-col">
+        
+        <div id="header-area">
+            <h1 class="text-3xl font-black text-transparent bg-clip-text bg-gradient-to-r from-red-500 to-yellow-500 mb-1">
+                ⛩️ もさくじ
+            </h1>
+            <p class="text-xs text-gray-500 mb-5 border-b pb-3">運勢とおすすめポストを占います</p>
+        </div>
+
+        <!-- ガチャを引くボタン -->
+        <button id="draw-btn" class="relative group mx-auto mb-2 focus:outline-none">
+            <div class="absolute inset-0 bg-red-400 rounded-full blur opacity-50 group-hover:opacity-100 transition duration-300"></div>
+            <div class="relative bg-gradient-to-b from-red-400 to-red-600 text-white font-bold text-xl py-4 px-10 rounded-full shadow-lg transform transition-transform group-hover:scale-105 active:scale-95 flex items-center gap-2">
+                <span>おみくじを引く</span>
+                <span class="text-2xl">🥠</span>
+            </div>
+        </button>
+
+        <!-- ローディング表示 -->
+        <div id="loading" class="hidden my-8 text-red-500 animate-pulse font-bold text-lg">
+            神様にお伺いを立てています... ⛩️
+        </div>
+
+        <!-- 結果表示エリア -->
+        <div id="result-area" class="hidden flex-col items-center flex-grow overflow-hidden mt-4">
+            
+            <!-- 運勢結果 -->
+            <div class="text-sm font-bold text-gray-500 mb-1">あなたの運勢は...</div>
+            <div id="fortune-result" class="text-4xl font-black mb-2 drop-shadow-sm"></div>
+            <div id="fortune-desc" class="text-sm font-medium text-gray-700 mb-5 px-2 leading-relaxed"></div>
+
+            <!-- ボタンエリア（上部配置） -->
+            <div class="flex flex-col gap-2 mb-5 w-full px-2">
+                <div class="flex flex-row gap-2 w-full">
+                    <!-- おすすめ引用用ボタン -->
+                    <a id="quote-recommend-btn" href="#" target="_blank" rel="noopener noreferrer" class="flex-1 py-2.5 bg-black hover:bg-gray-800 text-white rounded-full font-bold text-xs shadow transition-colors flex justify-center items-center gap-1">
+                        <svg class="w-3.5 h-3.5" fill="currentColor" viewBox="0 0 24 24" aria-hidden="true"><path d="M18.244 2.25h3.308l-7.227 8.26 8.502 11.24H16.17l-5.214-6.817L4.99 21.75H1.68l7.73-8.835L1.254 2.25H8.08l4.713 6.231zm-1.161 17.52h1.833L7.008 5.968H5.078z"></path></svg>
+                        おすすめ引用
+                    </a>
+                    <!-- もさくじ引用用ボタン -->
+                    <a id="quote-app-btn" href="#" target="_blank" rel="noopener noreferrer" class="flex-1 py-2.5 bg-black hover:bg-gray-800 text-white rounded-full font-bold text-xs shadow transition-colors flex justify-center items-center gap-1">
+                        <svg class="w-3.5 h-3.5" fill="currentColor" viewBox="0 0 24 24" aria-hidden="true"><path d="M18.244 2.25h3.308l-7.227 8.26 8.502 11.24H16.17l-5.214-6.817L4.99 21.75H1.68l7.73-8.835L1.254 2.25H8.08l4.713 6.231zm-1.161 17.52h1.833L7.008 5.968H5.078z"></path></svg>
+                        もさくじ引用
+                    </a>
+                </div>
+                <!-- もう1回ボタン -->
+                <button id="retry-btn" class="w-full py-2.5 bg-gray-200 hover:bg-gray-300 text-gray-700 rounded-full font-bold text-sm shadow transition-colors">
+                    もう1回
+                </button>
+            </div>
+
+            <div class="text-xs font-bold text-gray-400 mb-2">▼ おすすめポスト ▼</div>
+            
+            <!-- URLが表示されるコンテナ（高さを縮小し、スクロールを削除） -->
+            <div id="tweet-container" class="w-full bg-gray-50 rounded-xl border border-gray-100 min-h-[80px] flex items-center justify-center p-3">
+                <!-- ここにURLが表示されます -->
+            </div>
+        </div>
+    </div>
+
+    <script>
+        const drawBtn = document.getElementById('draw-btn');
+        const retryBtn = document.getElementById('retry-btn');
+        const quoteRecommendBtn = document.getElementById('quote-recommend-btn');
+        const quoteAppBtn = document.getElementById('quote-app-btn');
+        const resultArea = document.getElementById('result-area');
+        const fortuneResult = document.getElementById('fortune-result');
+        const fortuneDesc = document.getElementById('fortune-desc');
+        const tweetContainer = document.getElementById('tweet-container');
+        const loading = document.getElementById('loading');
+        const headerArea = document.getElementById('header-area');
+
+        // 運勢の定義
+        const fortunes = [
+            { text: "テラ吉", color: "text-red-600", desc: "システム絶好調！ フル充電のパワーで、どんな願いも爆速で叶うかも！" },
+            { text: "アプデ吉", color: "text-pink-500", desc: "運気の大規模アップデート完了！ 今日は新しい才能やアイデアがインストールされる予感！" },
+            { text: "フルスロットル吉", color: "text-orange-600", desc: "モーター回転数MAX！ 迷ったらGOサイン。今日の君は誰にも止められないぞ！" },
+            { text: "メカ吉", color: "text-blue-500", desc: "心の歯車がガッチリ噛み合う日。周りの人との見事な連携プレーで、トラブルも回避できそう！" },
+            { text: "ロボ吉", color: "text-indigo-500", desc: "鋼のメンタルで困難を乗り切れるかも。少しの衝撃ではへこたれないタフな一日！" },
+            { text: "Wi-Fi吉", color: "text-teal-500", desc: "アンテナ感度良好！ ずっと探していた情報や、素敵なご縁とサクサク繋がるかも！" },
+            { text: "エコ吉", color: "text-green-600", desc: "今日は省エネモードがおすすめ。無理せずバッテリーを温存すれば、夕方から良いことがあるかも。" },
+            { text: "バックアップ吉", color: "text-emerald-500", desc: "うっかりデータ消失（忘れ物）に注意！ こまめなメモと確認（保存）が君を救うぞ！" },
+            { text: "メンテ吉", color: "text-yellow-600", desc: "少し動きがカクカクしているかも？ 暖かい飲み物でオイル交換をして、自分を労わろう。" },
+            { text: "バグ凶", color: "text-purple-600", desc: "予期せぬエラー発生の予感！？ でも焦らないで。深呼吸して『再起動』すれば問題なし！" },
+            { text: "フリーズ大凶", color: "text-gray-800", desc: "思考回路がショート寸前！ 処理落ちで動けなくなる前に、今日はスリープモードで強制終了＆たっぷり休もう！" },
+            { text: "ポンコツ吉", color: "text-fuchsia-500", desc: "たまにはエラーを出したっていいじゃない！ その人間らしい隙が逆に愛されて、人気者になれるかも！？" },
+            { text: "もさ吉", color: "text-yellow-500", desc: "もさくとのシンクロ率100%！ もさくも驚くほどの奇跡が起きる、超ラッキーな一日！" },
+            { text: "急速充電吉", color: "text-red-500", desc: "エナジーチャージ完了！ 落ち込むことがあっても、驚異のスピードで回復してすぐに立ち直れる日！" },
+            { text: "マルチタスク吉", color: "text-cyan-600", desc: "内蔵CPUの処理能力が爆上がり！ 勉強も遊びも同時進行でサクサクこなせる、超絶デキる一日！" },
+            { text: "ディープラーニング吉", color: "text-blue-600", desc: "学習意欲が急上昇中。今日の君はスポンジのように知識を吸収し、最強の自分へと進化できるぞ！" },
+            { text: "ロック解除吉", color: "text-amber-500", desc: "ずっと解けなかったパスワードがついに解除！ 隠された才能の扉が開いたり、悩みがスッキリ解決する予感。" },
+            { text: "センサー吉", color: "text-lime-600", desc: "頭の上の高精度センサーがピコン！と反応。今日は直感が冴え渡り、隠れたラッキーを見つけ出せるぞ！" },
+            { text: "セキュリティ吉", color: "text-slate-600", desc: "強固なファイアウォールが君をガード！ 嫌なことやトラブルは自動でブロックされる安心安全な日。" },
+            { text: "クラウド吉", color: "text-sky-500", desc: "心の保存容量が無制限に！ 小さなミスは気にせず、広い心で全てを受け入れられる器の大きな一日に。" },
+            { text: "初期化吉", color: "text-gray-500", desc: "モヤモヤする気持ちはここでフォーマット（初期化）！ まっさらな状態から、新しいスタートを切るのに最適な日。" },
+            { text: "オーバーヒート凶", color: "text-red-800", desc: "頑張りすぎて頭からプシューッと煙が出そう！？ 冷却ファンを全開にして、今日はとにかく頭を空っぽにして休むべし！" },
+            { text: "ミラクルバグ吉", color: "text-violet-500", desc: "予定外の行動が思わぬ幸運を呼ぶ『良いバグ』が発生！ いつもと違う道を通ってみると、素敵な発見があるかも？" }
+        ];
+
+        // ===============================================================
+        // 📝 ここにご自身のポスト（ツイート）のURLを複数追加してください
+        // ※画像や動画が付いているポストのURLを推奨します。
+        // ===============================================================
+        const postUrls = [
+            "https://x.com/mosaku3/status/2013974993978466418",
+            "https://x.com/mosaku3/status/2001948369166741543",
+            "https://x.com/mosaku3/status/2019975339905282521",
+            "https://x.com/mosaku3/status/2028253583779778604",
+            "https://x.com/mosaku3/status/2014304343378583761",
+            "https://x.com/mosaku3/status/2024444704436473943",
+            "https://x.com/mosaku3/status/2020104529187074562",
+            "https://x.com/mosaku3/status/2000763059145756779",
+            "https://x.com/mosaku3/status/2013746107151708462",
+            "https://x.com/mosaku3/status/2018203226546598245",
+            "https://x.com/mosaku3/status/2003236859124605016",
+            "https://x.com/mosaku3/status/2000337756204212445",
+            "https://x.com/mosaku3/status/2029567528608129448",
+            "https://x.com/mosaku3/status/2031262987139621062",
+            "https://x.com/mosaku3/status/2002650495798665361",
+            "https://x.com/mosaku3/status/2017115811224371229",
+            "https://x.com/mosaku3/status/2015203933632016582",
+            "https://x.com/mosaku3/status/2001216045353177381",
+            "https://x.com/mosaku3/status/2030176874467577870",
+            "https://x.com/mosaku3/status/2029181730712895843",
+            "https://x.com/mosaku3/status/2022158124136960391",
+            "https://x.com/mosaku3/status/2000700144388595738",
+            "https://x.com/mosaku3/status/2001563457871810743",
+            "https://x.com/mosaku3/status/2000213915561869745",
+            "https://x.com/mosaku3/status/2030480653566038059",
+            "https://x.com/mosaku3/status/2000400671137472667",
+            "https://x.com/mosaku3/status/2000587901923447139",
+            "https://x.com/mosaku3/status/2013383719487201554",
+            "https://x.com/mosaku3/status/2000445969754927387",
+            "https://x.com/mosaku3/status/2023892967522537617",
+            "https://x.com/mosaku3/status/2001062531893486073",
+            "https://x.com/mosaku3/status/2001850223425962271",
+            "https://x.com/mosaku3/status/2002212610821759181",
+            "https://x.com/mosaku3/status/2001424919851053466",
+            "https://x.com/mosaku3/status/2000485982886371718",
+            "https://x.com/mosaku3/status/2031570662343716904",
+            "https://x.com/mosaku3/status/2009035065506885726",
+            "https://x.com/mosaku3/status/2014533798483132537",
+            "https://x.com/mosaku3/status/2026583194372374852",
+            "https://x.com/mosaku3/status/2024680658342146453",
+            "https://x.com/mosaku3/status/2001895520915329410",
+            "https://x.com/mosaku3/status/2001170745121259870",
+            "https://x.com/mosaku3/status/2001098050148950513",
+            "https://x.com/mosaku3/status/2017007597971525888",
+            "https://x.com/mosaku3/status/2028970480091472057",
+            "https://x.com/mosaku3/status/2001925720130666551",
+            "https://x.com/mosaku3/status/2001487835031839176",
+            "https://x.com/mosaku3/status/2002982684549853275",
+            "https://x.com/mosaku3/status/2031203639717671111",
+            "https://x.com/mosaku3/status/2018818690125549987",
+            "https://x.com/mosaku3/status/2008310289293545599",
+            "https://x.com/mosaku3/status/2023530579686199547",
+            "https://x.com/mosaku3/status/2002226254981050470",
+            "https://x.com/mosaku3/status/2020265543031484612",
+            "https://x.com/mosaku3/status/2002939902397403427",
+            "https://x.com/mosaku3/status/2020993864790659147",
+            "https://x.com/mosaku3/status/2009464642104631463",
+            "https://x.com/mosaku3/status/2029881409868026076",
+            "https://x.com/mosaku3/status/2002620296688496981",
+            "https://x.com/mosaku3/status/2029547906840293843",
+            "https://x.com/mosaku3/status/2000846106394059110",
+            "https://x.com/mosaku3/status/2028680865497461163",
+            "https://x.com/mosaku3/status/2015087639813357806",
+            "https://x.com/mosaku3/status/2000808357444407807",
+            "https://x.com/mosaku3/status/2030283792712434077",
+            "https://x.com/mosaku3/status/2001125446986162349",
+            "https://x.com/mosaku3/status/2015560503746257044",
+            "https://x.com/mosaku3/status/2003012883433902228",
+            "https://x.com/mosaku3/status/2002395258165080185",
+            "https://x.com/mosaku3/status/2016286021638619328",
+            "https://x.com/mosaku3/status/2013864526920265886",
+            "https://x.com/mosaku3/status/2016895250216996940",
+            "https://x.com/mosaku3/status/2018463897741848932",
+            "https://x.com/mosaku3/status/2013789585827053581",
+            "https://x.com/mosaku3/status/2003299774280401160",
+            "https://x.com/mosaku3/status/2030439459997749370",
+            "https://x.com/mosaku3/status/2028615385814286726",
+            "https://x.com/mosaku3/status/2026136529790435433",
+            "https://x.com/mosaku3/status/2002333406886011226",
+            "https://x.com/mosaku3/status/2013809022395412793",
+            "https://x.com/mosaku3/status/2002574998456971727",
+            "https://x.com/mosaku3/status/2014720581435064348",
+            "https://x.com/mosaku3/status/2003073281688293563",
+            "https://x.com/mosaku3/status/2008375720444403981",
+            "https://x.com/mosaku3/status/2003375271605325854",
+            "https://x.com/mosaku3/status/2008554398646206937",
+            "https://x.com/mosaku3/status/2019185621550657821",
+            "https://x.com/mosaku3/status/2029690722660798905",
+            "https://x.com/mosaku3/status/2000370472324640957",
+            "https://x.com/mosaku3/status/2024630537479213571",
+            "https://x.com/mosaku3/status/2014110942867628417",
+            "https://x.com/mosaku3/status/2030164644078440536",
+            "https://x.com/mosaku3/status/2031019570262339888",
+            "https://x.com/mosaku3/status/2016645210332180644",
+            "https://x.com/mosaku3/status/2000883855218426309",
+            "https://x.com/mosaku3/status/2028757819009486887",
+            "https://x.com/mosaku3/status/2008682450504085644",
+            "https://x.com/mosaku3/status/2020332003837853801",
+            "https://x.com/mosaku3/status/2003599247174987842",
+            "https://x.com/mosaku3/status/2002405124107641286",
+            "https://x.com/mosaku3/status/2020476954722365828",
+            "https://x.com/mosaku3/status/2003664953497256113",
+            "https://x.com/mosaku3/status/2020036569361707222",
+            "https://x.com/mosaku3/status/2028659544273084921",
+            "https://x.com/mosaku3/status/2030644325164679607",
+            "https://x.com/mosaku3/status/2016170477316931902",
+            "https://x.com/mosaku3/status/2022581828545315194",
+            "https://x.com/mosaku3/status/2025050304103022898",
+            "https://x.com/mosaku3/status/2015231927142559841",
+            "https://x.com/mosaku3/status/2016345737475301517",
+            "https://x.com/mosaku3/status/2004462435403502077",
+            "https://x.com/mosaku3/status/2026472651523502337",
+            "https://x.com/mosaku3/status/2014477819922022812",
+            "https://x.com/mosaku3/status/2009143278298451976",
+            "https://x.com/mosaku3/status/2009880636656627962",
+            "https://x.com/mosaku3/status/2008418502554861692",
+            "https://x.com/mosaku3/status/2031006174343254288",
+            "https://x.com/mosaku3/status/2019544834948903195",
+            "https://x.com/mosaku3/status/2002874597142909383",
+            "https://x.com/mosaku3/status/2027942860583211360",
+            "https://x.com/mosaku3/status/2011209392352375049",
+            "https://x.com/mosaku3/status/2026791438181425156",
+            "https://x.com/mosaku3/status/2011934167848927398",
+            "https://x.com/mosaku3/status/2024259701907869981",
+            "https://x.com/mosaku3/status/2001787307859353768",
+            "https://x.com/mosaku3/status/2023168191711650160",
+            "https://x.com/mosaku3/status/2012770268763001257",
+            "https://x.com/mosaku3/status/2009100496435302530",
+            "https://x.com/mosaku3/status/2023313931184595307",
+            "https://x.com/mosaku3/status/2007255841704185906",
+            "https://x.com/mosaku3/status/2013459418617196846",
+            "https://x.com/mosaku3/status/2007643863054504195",
+            "https://x.com/mosaku3/status/2022091959779893539",
+            "https://x.com/mosaku3/status/2002288108025622881",
+            "https://x.com/mosaku3/status/2023684091565273267",
+            "https://x.com/mosaku3/status/2008056240421896377",
+            "https://x.com/mosaku3/status/2015203937062994151",
+            "https://x.com/mosaku3/status/2018092245090799750",
+            "https://x.com/mosaku3/status/2031500596453224954",
+            "https://x.com/mosaku3/status/2009641562763125051",
+            "https://x.com/mosaku3/status/2021471438100947038",
+            "https://x.com/mosaku3/status/2009841321121591798",
+            "https://x.com/mosaku3/status/2017397269902069925",
+            "https://x.com/mosaku3/status/2003420570525008043",
+            "https://x.com/mosaku3/status/2025787473314578881",
+            "https://x.com/mosaku3/status/2016626035190804499",
+            "https://x.com/mosaku3/status/2018565362913038461",
+            "https://x.com/mosaku3/status/2030999588006744307",
+            "https://x.com/mosaku3/status/2001533133393654259",
+            "https://x.com/mosaku3/status/2022596928077242792",
+            "https://x.com/mosaku3/status/2010847004654522706",
+            "https://x.com/mosaku3/status/2007722771380576263",
+            "https://x.com/mosaku3/status/2023231106737418441",
+            "https://x.com/mosaku3/status/2022868718993465378",
+            "https://x.com/mosaku3/status/2003043082879824081",
+            "https://x.com/mosaku3/status/2026428424760537385",
+            "https://x.com/mosaku3/status/2011571780033659128",
+            "https://x.com/mosaku3/status/2004388196453634103",
+            "https://x.com/mosaku3/status/2005416722862403697",
+            "https://x.com/mosaku3/status/2010909919256731848",
+            "https://x.com/mosaku3/status/2001246243369181601",
+            "https://x.com/mosaku3/status/2019929894722105537",
+            "https://x.com/mosaku3/status/2013612452655902730",
+            "https://x.com/mosaku3/status/2029397739268915695",
+            "https://x.com/mosaku3/status/2026863666612810151",
+            "https://x.com/mosaku3/status/2017732957856051568",
+            "https://x.com/mosaku3/status/2018157928348365271",
+            "https://x.com/mosaku3/status/2001971018974507415",
+            "https://x.com/mosaku3/status/2002257909305004542",
+            "https://x.com/mosaku3/status/2024864556150042897",
+            "https://x.com/mosaku3/status/2020923096954540488",
+            "https://x.com/mosaku3/status/2019987015673213116",
+            "https://x.com/mosaku3/status/2001630945728987428",
+            "https://x.com/mosaku3/status/2018897503517855760",
+            "https://x.com/mosaku3/status/2029112186308837448",
+            "https://x.com/mosaku3/status/2002775134562869286",
+            "https://x.com/mosaku3/status/2030857232506933329",
+            "https://x.com/mosaku3/status/2025091887020011605",
+            "https://x.com/mosaku3/status/2017070513219391658",
+            "https://x.com/mosaku3/status/2030942770526114180",
+            "https://x.com/mosaku3/status/2007467236290642059"
+        ];
+
+        // URLからポストID（数字の羅列）を抽出する関数
+        function extractTweetId(url) {
+            const match = url.match(/\/status\/(\d+)/);
+            return match ? match[1] : null;
+        }
+
+        // ガチャを引く処理
+        function drawGacha() {
+            // UIの状態切り替え
+            drawBtn.classList.add('hidden');
+            headerArea.classList.add('hidden');
+            
+            // ローディング表示
+            resultArea.classList.add('hidden');
+            loading.classList.remove('hidden');
+
+            // ツイートコンテナを一時的に透明化
+            tweetContainer.style.opacity = '0';
+            tweetContainer.innerHTML = ''; // 前回の結果をクリア
+
+            // ランダムに運勢を選択
+            const randomFortune = fortunes[Math.floor(Math.random() * fortunes.length)];
+            fortuneResult.textContent = randomFortune.text;
+            fortuneResult.className = `text-4xl font-black mb-2 drop-shadow-sm ${randomFortune.color}`;
+            fortuneDesc.textContent = randomFortune.desc; // 説明文を表示
+
+            // ランダムにURLを選択
+            const randomUrl = postUrls[Math.floor(Math.random() * postUrls.length)];
+            
+            // おすすめ引用ポスト用のテキスト
+            const shareRecommendText = `もさくじ引いたよ！\n結果は${randomFortune.text}\nおすすめポストは ${randomUrl}\n#もさくじ`;
+            quoteRecommendBtn.href = `https://twitter.com/intent/tweet?text=${encodeURIComponent(shareRecommendText)}`;
+
+            // もさくじ引用ポスト用のテキスト
+            const shareAppText = `もさくじ引いたよ！\n結果は${randomFortune.text}\n\nhttps://mosaku3.github.io/x-gacha/index.html\n#もさくじ`;
+            quoteAppBtn.href = `https://twitter.com/intent/tweet?text=${encodeURIComponent(shareAppText)}`;
+
+            // URLリンクのHTMLを生成
+            const urlHtml = `
+                <div class="w-full break-all">
+                    <a href="${randomUrl}" target="_blank" rel="noopener noreferrer" class="text-blue-500 hover:text-blue-700 underline font-medium text-sm transition-colors">
+                        ${randomUrl}
+                    </a>
+                </div>
+            `;
+            tweetContainer.innerHTML = urlHtml;
+
+            // ガチャの演出として、少し待ってから結果を表示
+            setTimeout(() => {
+                loading.classList.add('hidden');
+                resultArea.classList.remove('hidden');
+                tweetContainer.style.opacity = '1';
+                
+                // アニメーションを付与
+                tweetContainer.classList.remove('bounce-animation');
+                void tweetContainer.offsetWidth; // リフローを強制してアニメーションをリセット
+                tweetContainer.classList.add('bounce-animation');
+            }, 800); // 0.8秒待機
+        }
+
+        // 初期状態に戻す処理
+        function resetUI() {
+            resultArea.classList.add('hidden');
+            headerArea.classList.remove('hidden');
+            drawBtn.classList.remove('hidden');
+            tweetContainer.innerHTML = '';
+        }
+
+        // イベントリスナーの設定
+        drawBtn.addEventListener('click', drawGacha);
+        retryBtn.addEventListener('click', resetUI);
+    </script>
+</body>
+</html>
